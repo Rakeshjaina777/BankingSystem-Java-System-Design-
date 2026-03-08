@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"c:\\\\Users\\\\380517\\\\IdeaProjects\\\\system-design\" /b)",
+      "Bash(docker --version)",
+      "Bash(cmd.exe /c \"docker --version\")",
+      "Bash(cmd.exe /c \"docker --version 2>&1\")",
+      "Bash(cmd.exe /c \"where docker\")",
+      "Bash(cmd.exe /c \"echo %PATH%\")",
+      "Bash(powershell.exe -Command \"docker --version\")",
+      "Bash(powershell.exe -Command \"docker info 2>&1 | Select-Object -First 10\")",
+      "Bash(powershell.exe -Command \"docker compose version\")",
+      "Bash(powershell.exe -Command \"docker info 2>&1 | Select-String ''Server Version|Operating System|Total Memory|ERROR|error''\")",
+      "Bash(powershell.exe -Command \"Start-Process ''C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe''\")",
+      "Bash(powershell.exe -Command \"Start-Sleep -Seconds 30; docker info 2>&1 | Select-String ''Server Version|ERROR|error''\")",
+      "Bash(powershell.exe -Command \"Start-Sleep -Seconds 40; docker info 2>&1 | Select-String ''Server Version|ERROR|error''\")",
+      "Bash(powershell.exe -Command \"Get-Process ''Docker Desktop'' -ErrorAction SilentlyContinue | Select-Object ProcessName, Id, StartTime\")",
+      "Bash(powershell.exe -Command \"Get-Process *docker* -ErrorAction SilentlyContinue | Select-Object ProcessName, Id\")",
+      "Bash(powershell.exe -Command \"Test-Path ''C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe''\")",
+      "Bash(powershell.exe -Command \"Get-Service *docker* | Select-Object Name, Status, StartType\")",
+      "Bash(powershell.exe -Command \"Start-Service ''com.docker.service'' 2>&1\")",
+      "Bash(powershell.exe -Command \"cd ''c:\\\\Users\\\\380517\\\\IdeaProjects\\\\system-design''; .\\\\mvnw.cmd clean compile 2>&1 | Select-Object -Last 30\")",
+      "Bash(powershell.exe -Command \":*)"
+    ]
+  }
+}
