@@ -35,3 +35,8 @@ build/
 ### Temp files ###
 run_out.txt
 run_error.txt
+
+### Secrets - never commit these ###
+src/main/resources/application.properties
+src/main/resources/application-*.properties
+src/main/resources/application-*.yml
