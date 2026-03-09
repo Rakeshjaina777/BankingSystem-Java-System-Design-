@@ -2,59 +2,49 @@ package com.rakesh.systemdesign.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * ==================== @Configuration CLASS ====================
+ * ==================== SECURITY CONFIG ====================
  *
- * WHAT:  A class marked @Configuration is a place to define BEANS manually.
- *        Normally Spring auto-creates beans by scanning @Service, @Repository, etc.
- *        But some classes (like BCryptPasswordEncoder) are from EXTERNAL LIBRARIES —
- *        you can't add @Service to their code. So you create them HERE.
+ * WHY WE NEED THIS:
+ *   When you add spring-boot-starter-security, Spring Security BLOCKS ALL endpoints
+ *   by default — every request needs authentication. Even Swagger UI won't load!
  *
- * WHAT IS @Bean?
- *   A method marked @Bean tells Spring:
- *     "Call this method at startup → take the returned object → store it in the IoC container"
+ *   So we MUST configure it to PERMIT all endpoints for now.
+ *   Later (Part 8+), we'll add JWT token authentication here.
  *
- *   After this, ANYWHERE in your code you can inject PasswordEncoder:
- *     public AuthService(PasswordEncoder passwordEncoder) { ... }
- *     Spring will inject the BCryptPasswordEncoder object created here.
+ * SecurityFilterChain:
+ *   This is the CHAIN of security filters every HTTP request passes through.
+ *   Think of it like NestJS Guards — but more powerful.
  *
- * NestJS comparison:
- *   In NestJS you'd register in a module:
- *     @Module({
- *       providers: [{ provide: 'PasswordEncoder', useFactory: () => new BcryptService() }]
- *     })
+ *   Request → Filter 1 (CORS) → Filter 2 (CSRF) → Filter 3 (Auth) → Controller
  *
- * ==================== WHAT IS BCrypt? ====================
- *
- *   BCrypt is a PASSWORD HASHING algorithm. It converts plain text to an irreversible hash.
- *
- *   Input:  "myPassword123"
- *   Output: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
- *
- *   Key properties:
- *     1. ONE-WAY: You CANNOT convert hash back to password. No decryption possible.
- *     2. SALTED: Same password → DIFFERENT hash each time (random salt added).
- *        "myPassword123" → "$2a$10$abc..." (first time)
- *        "myPassword123" → "$2a$10$xyz..." (second time)
- *        Hackers can't use precomputed tables (rainbow tables) to crack it.
- *     3. SLOW ON PURPOSE: Takes ~100ms to hash. Fast enough for login, too slow for brute force.
- *
- *   How login verification works:
- *     encoder.matches("plainPassword", "$2a$10$storedHash...")
- *     → BCrypt extracts the salt from the stored hash
- *     → Hashes "plainPassword" with that same salt
- *     → Compares: do they match? → true/false
+ *   We're configuring it to:
+ *     - Disable CSRF (not needed for REST APIs — only for form-based websites)
+ *     - Permit ALL requests (no authentication required for now)
  */
 @Configuration
+@EnableWebSecurity
 public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())   // Disable CSRF — REST APIs don't need it
+                .authorizeHttpRequests(auth -> auth
+                        .anyRequest().permitAll()   // Allow ALL endpoints without auth (for now)
+                );
+
+        return http.build();
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-        // This object is now a BEAN in the IoC container.
-        // Any class can inject it via constructor: PasswordEncoder passwordEncoder
     }
 }

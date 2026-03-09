@@ -55,10 +55,17 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- Spring Security Crypto — for BCrypt password hashing -->
+        <!-- Spring Security — for BCrypt password hashing + future JWT auth -->
         <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-crypto</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!-- Swagger / OpenAPI — auto-generates API docs + interactive UI to test APIs -->
+        <!-- Using version 2.8.6 — if Spring Boot 4.x causes issues, upgrade when springdoc 3.x releases -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.8.6</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
