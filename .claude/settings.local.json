@@ -20,7 +20,8 @@
       "Bash(powershell.exe -Command \"Get-Service *docker* | Select-Object Name, Status, StartType\")",
       "Bash(powershell.exe -Command \"Start-Service ''com.docker.service'' 2>&1\")",
       "Bash(powershell.exe -Command \"cd ''c:\\\\Users\\\\380517\\\\IdeaProjects\\\\system-design''; .\\\\mvnw.cmd clean compile 2>&1 | Select-Object -Last 30\")",
-      "Bash(powershell.exe -Command \":*)"
+      "Bash(powershell.exe -Command \":*)",
+      "Read(//c/Users/360517/IdeaProjects/system-design/src/main/java/com/rakesh/systemdesign/account/repository/**)"
     ]
   }
 }
