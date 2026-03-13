@@ -1,48 +1,57 @@
 package com.rakesh.systemdesign.account.entity;
 
-import com.rakesh.systemdesign.exception.InsufficientBalanceException;
+import com.rakesh.systemdesign.account.strategy.MinimumBalanceWithdrawalStrategy;
+import com.rakesh.systemdesign.account.strategy.RegularInterestStrategy;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 
 /**
- * ==================== OOP CONCEPT 3: POLYMORPHISM ====================
+ * ==================== SAVINGS ACCOUNT — STRATEGY PATTERN VERSION ====================
  *
- * WHAT:  Same method name (withdraw), different behavior per class.
+ * BEFORE (Polymorphism only):
+ *   SavingsAccount had @Override withdraw() with hardcoded minBalance check.
+ *   SavingsAccount had calculateMonthlyInterest() with hardcoded formula.
+ *   Problem: Can't change rules at runtime. VIP upgrade? New subclass needed!
  *
- *   Account.withdraw(500)         → basic check: balance >= 500
- *   SavingsAccount.withdraw(500)  → extra check: balance - 500 >= minBalance (₹1000)
- *   CurrentAccount.withdraw(500)  → allows overdraft up to limit
+ * AFTER (Strategy Pattern):
+ *   SavingsAccount NO LONGER overrides withdraw() or calculateMonthlyInterest().
+ *   Instead, @PostLoad assigns strategies from DB fields:
+ *     - MinimumBalanceWithdrawalStrategy(minimumBalance) → handles withdrawal rules
+ *     - RegularInterestStrategy(interestRate) → handles interest calculation
  *
- *   The code calling withdraw() doesn't need to know which TYPE of account it is!
+ *   Account.withdraw() delegates to strategy.validate()
+ *   Account.calculateMonthlyInterest() delegates to strategy.calculateMonthlyInterest()
  *
- *     Account account = accountRepository.findById(id);  // Could be Savings or Current
- *     account.withdraw(500);  // Java calls the CORRECT version automatically!
+ * WHAT CHANGED:
+ *   - REMOVED: @Override withdraw() → strategy handles it now
+ *   - REMOVED: calculateMonthlyInterest() → strategy handles it now
+ *   - ADDED: @PostLoad initStrategies() → assigns strategies when JPA loads from DB
  *
- *   This is RUNTIME POLYMORPHISM (method overriding).
+ * WHAT DID NOT CHANGE:
+ *   - interestRate field → still in DB, still on this entity
+ *   - minimumBalance field → still in DB, still on this entity
+ *   - @DiscriminatorValue("SAVINGS") → JPA mapping unchanged
+ *   - Database table → ZERO changes
  *
- * NestJS comparison:
- *   In TypeScript, you'd use interfaces or abstract classes:
- *     interface Account { withdraw(amount: number): void; }
- *     class SavingsAccount implements Account { withdraw(amount) { ... min balance check } }
- *     class CurrentAccount implements Account { withdraw(amount) { ... overdraft check } }
+ * @PostLoad — JPA lifecycle callback:
+ *   Called AUTOMATICALLY by JPA/Hibernate AFTER loading an entity from database.
+ *   Perfect for initializing @Transient fields that can't be stored in DB.
  *
- * @DiscriminatorValue("SAVINGS"):
- *   When JPA saves a SavingsAccount, it puts "SAVINGS" in the account_type column.
- *   When JPA reads a row with account_type="SAVINGS", it creates a SavingsAccount object.
+ *   Flow:
+ *     1. JPA reads row from DB: { account_type: "SAVINGS", interest_rate: 4.0, min_balance: 1000 }
+ *     2. JPA creates SavingsAccount object, sets all @Column fields
+ *     3. JPA calls @PostLoad → initStrategies()
+ *     4. initStrategies() creates strategy objects from the DB field values
+ *     5. Now account.withdraw() and account.calculateMonthlyInterest() work via strategies!
  *
- * ==================== LISKOV SUBSTITUTION PRINCIPLE (SOLID - L) ====================
- *
- *   "Any code that works with Account should also work with SavingsAccount."
- *
- *   Example:
- *     public void processDeposit(Account account, BigDecimal amount) {
- *         account.deposit(amount);  // Works for ANY account type!
- *     }
- *
- *   You can pass SavingsAccount OR CurrentAccount — both work correctly.
- *   This is Liskov Substitution in action.
+ *   NestJS comparison:
+ *     In TypeORM you'd use @AfterLoad():
+ *       @AfterLoad()
+ *       initStrategies() {
+ *         this.withdrawalStrategy = new MinimumBalanceWithdrawalStrategy(this.minimumBalance);
+ *       }
  */
 @Entity
 @DiscriminatorValue("SAVINGS")
@@ -58,47 +67,39 @@ public class SavingsAccount extends Account {
     private BigDecimal minimumBalance = new BigDecimal("1000");  // ₹1000 minimum
 
     /**
-     * ==================== METHOD OVERRIDING (Polymorphism) ====================
+     * @PostLoad — Called by JPA AFTER loading this entity from database.
      *
-     * @Override means: "I'm REPLACING the parent's withdraw() with my own version."
+     * Creates strategy objects from the DB-stored field values.
+     * This bridges the gap between "data in DB" and "behavior in Java":
+     *   - minimumBalance (DB column) → MinimumBalanceWithdrawalStrategy (Java object)
+     *   - interestRate (DB column) → RegularInterestStrategy (Java object)
      *
-     * Parent (Account.withdraw):
-     *   - Checks: amount > 0, account active, balance >= amount
-     *
-     * Child (SavingsAccount.withdraw):
-     *   - All parent checks PLUS: balance after withdrawal >= minimumBalance
-     *
-     * WHY override?
-     *   Savings accounts have a MINIMUM BALANCE rule.
-     *   If balance is ₹5000 and min is ₹1000, max withdrawal = ₹4000 (not ₹5000).
-     *
-     * super.withdraw(amount):
-     *   Calls the PARENT's withdraw method. We don't duplicate the parent's validation —
-     *   we ADD our extra check, then let the parent do the rest.
-     *   This is the OPEN/CLOSED PRINCIPLE (SOLID - O): extending without modifying.
+     * WHY here and not in Account?
+     *   Account doesn't know about interestRate or minimumBalance fields.
+     *   Only SavingsAccount has these columns → only SavingsAccount knows
+     *   which strategies to create and with what parameters.
      */
-    @Override
-    public void withdraw(BigDecimal amount) {
-        BigDecimal balanceAfterWithdrawal = getBalance().subtract(amount);
-        if (balanceAfterWithdrawal.compareTo(minimumBalance) < 0) {
-            throw new InsufficientBalanceException(amount,
-                    getBalance().subtract(minimumBalance));
-            // "Insufficient balance. Requested: 4500, Available: 4000"
-            // Available = balance - minBalance = 5000 - 1000 = 4000
-        }
-        super.withdraw(amount);  // Call parent's withdraw (does the actual balance deduction)
+    @PostLoad
+    private void initStrategies() {
+        setWithdrawalStrategy(new MinimumBalanceWithdrawalStrategy(this.minimumBalance));
+        setInterestStrategy(new RegularInterestStrategy(this.interestRate));
     }
 
-    /**
-     * Calculate interest for the account.
-     * This method EXISTS ONLY in SavingsAccount, not in CurrentAccount.
-     * CurrentAccount doesn't earn interest.
-     *
-     * Formula: balance * (interestRate / 100) / 12  → monthly interest
-     */
-    public BigDecimal calculateMonthlyInterest() {
-        return getBalance()
-                .multiply(interestRate)
-                .divide(new BigDecimal("1200"), 2, java.math.RoundingMode.HALF_UP);
-    }
+    // ==================== NO MORE @Override withdraw() ====================
+    // Previously had:
+    //   @Override
+    //   public void withdraw(BigDecimal amount) { ... minBalance check ... }
+    //
+    // NOW: Account.withdraw() delegates to MinimumBalanceWithdrawalStrategy.validate()
+    //   which does the EXACT SAME check: balance - amount >= minimumBalance
+    //
+    // The BEHAVIOR is identical. Only the STRUCTURE changed.
+    // This gives us runtime flexibility (can swap to NoRestrictionWithdrawalStrategy for VIP).
+
+    // ==================== NO MORE calculateMonthlyInterest() ====================
+    // Previously had:
+    //   public BigDecimal calculateMonthlyInterest() { ... formula ... }
+    //
+    // NOW: Account.calculateMonthlyInterest() delegates to RegularInterestStrategy
+    //   which does the EXACT SAME formula: balance * rate / 1200
 }

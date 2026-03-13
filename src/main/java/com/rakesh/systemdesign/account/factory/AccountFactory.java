@@ -1,68 +1,50 @@
 package com.rakesh.systemdesign.account.factory;
 
 import com.rakesh.systemdesign.account.entity.*;
+import com.rakesh.systemdesign.account.strategy.*;
 import com.rakesh.systemdesign.auth.entity.User;
-import com.rakesh.systemdesign.exception.InvalidOperationException;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * ==================== DESIGN PATTERN: FACTORY ====================
+ * ==================== ACCOUNT FACTORY — NOW WITH STRATEGY ASSIGNMENT ====================
  *
- * WHAT:  A Factory creates objects WITHOUT exposing creation logic to the caller.
- *        The caller says: "I want a SAVINGS account" → Factory returns the right object.
+ * BEFORE:
+ *   Factory created SavingsAccount/CurrentAccount objects.
+ *   Strategies didn't exist — subclasses had hardcoded @Override methods.
  *
- * WHY NOT just use `new SavingsAccount()` directly?
+ * AFTER:
+ *   Factory creates objects AND assigns the correct strategies.
+ *   This is important because @PostLoad only runs when loading FROM database.
+ *   For NEWLY CREATED accounts (not yet saved to DB), Factory must assign strategies.
  *
- *   Problem WITHOUT Factory:
- *     // In AccountService — scattered creation logic:
- *     if (type == SAVINGS) {
- *         SavingsAccount acc = new SavingsAccount();
- *         acc.setAccountNumber(generateNumber());
- *         acc.setInterestRate(new BigDecimal("4.0"));
- *         acc.setMinimumBalance(new BigDecimal("1000"));
- *         acc.setBalance(initialDeposit);
- *         acc.setUser(user);
- *         acc.setStatus(ACTIVE);
- *     } else if (type == CURRENT) {
- *         CurrentAccount acc = new CurrentAccount();
- *         acc.setAccountNumber(generateNumber());
- *         acc.setOverdraftLimit(new BigDecimal("50000"));
- *         // ... repeat similar code
- *     }
- *     // What if you add FIXED_DEPOSIT type later? Change every place that creates accounts!
+ * TWO PATHS for strategy assignment:
+ *   1. NEW account → Factory assigns strategies (this class)
+ *   2. EXISTING account loaded from DB → @PostLoad assigns strategies (in entity classes)
  *
- *   Solution WITH Factory:
- *     Account account = accountFactory.createAccount(SAVINGS, user, initialDeposit);
- *     // ONE LINE. Factory handles all the details.
- *     // Add new type? Change ONLY the factory. Nothing else changes.
- *
- *   This is OPEN/CLOSED PRINCIPLE (SOLID - O):
- *     - Open for extension (add new account types)
- *     - Closed for modification (don't change existing code)
+ *   Both paths result in the same strategies being assigned.
+ *   This ensures withdraw() and calculateMonthlyInterest() ALWAYS work,
+ *   whether the account was just created or loaded from database.
  *
  * NestJS comparison:
- *   In NestJS you might use a factory function or a provider factory:
- *     const accountFactory = {
- *       create(type: 'SAVINGS' | 'CURRENT', user, deposit) {
- *         switch(type) { case 'SAVINGS': return new SavingsAccount(...); }
- *       }
- *     };
- *
- * @Component → makes this a Spring Bean so it can be injected into AccountService.
+ *   Same concept — when creating a new object, you'd set the strategy:
+ *     const account = new SavingsAccount();
+ *     account.withdrawalStrategy = new MinimumBalanceWithdrawalStrategy(1000);
+ *     account.interestStrategy = new RegularInterestStrategy(4.0);
  */
 @Component
 public class AccountFactory {
 
     /**
      * Creates the right type of Account based on AccountType.
+     * NOW also assigns the correct withdrawal and interest strategies.
      *
      * @param type           SAVINGS or CURRENT
      * @param user           The User who owns this account
      * @param initialDeposit Starting balance
-     * @return               SavingsAccount or CurrentAccount (both are Account type)
+     * @return               SavingsAccount or CurrentAccount with strategies assigned
      */
     public Account createAccount(AccountType type, User user, BigDecimal initialDeposit) {
 
@@ -73,7 +55,15 @@ public class AccountFactory {
                 account.setBalance(initialDeposit);
                 account.setUser(user);
                 account.setStatus(AccountStatus.ACTIVE);
-                // SavingsAccount-specific defaults are set in the entity class
+
+                // STRATEGY ASSIGNMENT — for newly created account
+                // Uses the default values from SavingsAccount fields:
+                //   interestRate = 4.0, minimumBalance = 1000
+                account.setWithdrawalStrategy(
+                        new MinimumBalanceWithdrawalStrategy(account.getMinimumBalance()));
+                account.setInterestStrategy(
+                        new RegularInterestStrategy(account.getInterestRate()));
+
                 yield account;
             }
             case CURRENT -> {
@@ -82,6 +72,14 @@ public class AccountFactory {
                 account.setBalance(initialDeposit);
                 account.setUser(user);
                 account.setStatus(AccountStatus.ACTIVE);
+
+                // STRATEGY ASSIGNMENT — for newly created account
+                // Uses the default value from CurrentAccount field:
+                //   overdraftLimit = 50000
+                account.setWithdrawalStrategy(
+                        new OverdraftWithdrawalStrategy(account.getOverdraftLimit()));
+                account.setInterestStrategy(new NoInterestStrategy());
+
                 yield account;
             }
         };
@@ -91,7 +89,8 @@ public class AccountFactory {
          *   When you add FIXED_DEPOSIT type:
          *     1. Create FixedDepositAccount extends Account
          *     2. Add FIXED_DEPOSIT to AccountType enum
-         *     3. Add case here
+         *     3. Add case here with appropriate strategies
+         *     4. Create new strategy if needed (e.g. PenaltyWithdrawalStrategy)
          *   NOTHING else in the codebase needs to change!
          */
     }
@@ -99,8 +98,6 @@ public class AccountFactory {
     /**
      * Generates a unique account number.
      * Format: ACC-XXXXXXXX (8 random chars from UUID)
-     *
-     * In production: you'd use a sequence from DB for guaranteed uniqueness.
      */
     private String generateAccountNumber() {
         return "ACC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
